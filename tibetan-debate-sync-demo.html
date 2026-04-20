@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tibetan Debate — Sync Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #F0D080;
+    --gold-dim: #7A6230;
+    --crimson: #8B1A1A;
+    --deep: #0D0B08;
+    --surface: #1A1610;
+    --surface2: #231E14;
+    --text: #E8DCC0;
+    --text-dim: #9A8A6A;
+    --green: #4A8A5A;
+    --green-light: #7ABA8A;
+  }
+
+  body {
+    background: var(--deep);
+    color: var(--text);
+    font-family: 'EB Garamond', serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Grain overlay ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 1000; opacity: 0.6;
+  }
+
+  /* ─── ROLE SELECTOR (shown when no role param) ─── */
+  #role-selector {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 2rem; padding: 2rem;
+    text-align: center;
+  }
+
+  .mandala {
+    width: 80px; height: 80px;
+    border: 2px solid var(--gold-dim);
+    border-radius: 50%;
+    position: relative;
+    animation: spin 20s linear infinite;
+    box-shadow: 0 0 40px rgba(201,168,76,0.15);
+  }
+  .mandala::before, .mandala::after {
+    content: ''; position: absolute; inset: 8px;
+    border: 1px solid var(--gold-dim); border-radius: 50%;
+  }
+  .mandala::after { inset: 20px; border-style: dashed; animation: spin 8s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .selector-title {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+
+  .selector-sub {
+    font-size: 1.1rem; color: var(--text-dim); font-style: italic;
+    max-width: 400px; line-height: 1.7;
+  }
+
+  .role-buttons {
+    display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;
+    margin-top: 1rem;
+  }
+
+  .role-btn {
+    padding: 1.2rem 2.5rem;
+    background: transparent;
+    border: 1px solid var(--gold-dim);
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .role-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--gold); opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .role-btn:hover::before { opacity: 0.08; }
+  .role-btn:hover { border-color: var(--gold); box-shadow: 0 0 20px rgba(201,168,76,0.2); }
+  .role-btn span { position: relative; }
+
+  .role-hint { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem; display: block; font-style: italic; }
+
+  /* ─── SHARED LAYOUT ─── */
+  .app { display: none; flex-direction: column; min-height: 100vh; }
+  .app.active { display: flex; }
+
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid rgba(201,168,76,0.15);
+    background: rgba(13,11,8,0.8);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .header-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+  }
+
+  .role-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid currentColor;
+    text-transform: uppercase;
+  }
+  .role-badge.controller { color: var(--gold); }
+  .role-badge.display { color: var(--green-light); }
+
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .sync-dot.active {
+    background: var(--green-light);
+    box-shadow: 0 0 8px var(--green-light);
+    animation: pulse 1s ease-out;
+  }
+  @keyframes pulse { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+
+  /* ─── CONTROLLER ─── */
+  #controller { padding: 2rem; gap: 2rem; }
+
+  .section-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 1rem;
+  }
+
+  .debaters-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+  }
+
+  .debater-card {
+    background: var(--surface);
+    border: 1px solid rgba(201,168,76,0.15);
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .debater-card::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px; background: var(--gold); transform: scaleX(0);
+    transition: transform 0.3s ease;
+  }
+  .debater-card.active::after { transform: scaleX(1); }
+  .debater-card.active { border-color: rgba(201,168,76,0.4); background: var(--surface2); }
+
+  .debater-role-label {
+    font-family: 'Cinzel', serif; font-size: 0.65rem;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 0.4rem;
+  }
+
+  .debater-name {
+    font-family: 'Cinzel', serif; font-size: 1.4rem;
+    color: var(--gold); font-weight: 700;
+  }
+
+  .debater-score {
+    font-size: 2.5rem; font-weight: 500; margin: 0.8rem 0;
+    color: var(--text); line-height: 1;
+  }
+
+  .score-btns { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+
+  .score-btn {
+    width: 36px; height: 36px;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold);
+    font-size: 1.2rem; cursor: pointer;
+    font-family: 'Cinzel', serif;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .score-btn:hover { background: rgba(201,168,76,0.1); border-color: var(--gold); }
+  .score-btn.minus { color: var(--crimson); border-color: rgba(139,26,26,0.3); }
+  .score-btn.minus:hover { background: rgba(139,26,26,0.1); border-color: var(--crimson); }
+
+  .phase-section { margin-top: 1rem; }
+
+  .phase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+
+  .phase-btn {
+    padding: 0.8rem 0.5rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.2);
+    color: var(--text-dim);
+    font-family: 'EB Garamond', serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    font-style: italic;
+  }
+  .phase-btn:hover { border-color: rgba(201,168,76,0.5); color: var(--text); }
+  .phase-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.05); }
+
+  .timer-section { margin-top: 1rem; }
+
+  .timer-display {
+    font-family: 'Cinzel', serif; font-size: 3.5rem;
+    color: var(--gold); text-align: center;
+    letter-spacing: 0.1em; padding: 1rem 0;
+    border-top: 1px solid rgba(201,168,76,0.1);
+    border-bottom: 1px solid rgba(201,168,76,0.1);
+  }
+  .timer-display.running { color: var(--green-light); }
+  .timer-display.warning { color: #E08040; }
+  .timer-display.alarm { color: var(--crimson); animation: blink 0.5s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+
+  .timer-btns { display: flex; gap: 1rem; margin-top: 1rem; justify-content: center; }
+
+  .ctrl-btn {
+    padding: 0.7rem 1.8rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ctrl-btn:hover { background: rgba(201,168,76,0.08); border-color: var(--gold); }
+  .ctrl-btn.primary { background: rgba(201,168,76,0.1); border-color: var(--gold); }
+  .ctrl-btn.danger { color: var(--crimson); border-color: rgba(139,26,26,0.3); }
+  .ctrl-btn.danger:hover { background: rgba(139,26,26,0.1); border-color: var(--crimson); }
+
+  /* ─── DISPLAY VIEW ─── */
+  #display {
+    padding: 0; justify-content: center; align-items: center;
+    background: var(--deep); position: relative;
+  }
+
+  .display-inner {
+    width: 100%; max-width: 900px; padding: 3rem;
+    display: flex; flex-direction: column; gap: 2.5rem;
+    align-items: center;
+  }
+
+  .display-ornament {
+    font-size: 2rem; color: var(--gold-dim);
+    letter-spacing: 0.5em;
+    opacity: 0.6;
+  }
+
+  .display-phase {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(0.9rem, 2vw, 1.1rem);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    text-align: center;
+  }
+
+  .display-scores {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    width: 100%; gap: 2rem; align-items: center;
+  }
+
+  .display-debater {
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  }
+
+  .display-debater-role {
+    font-family: 'Cinzel', serif; font-size: 0.65rem;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .display-debater-name {
+    font-family: 'Cinzel', serif; font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 700; color: var(--gold); text-align: center;
+  }
+
+  .display-debater-score {
+    font-family: 'Cinzel', serif; font-size: clamp(4rem, 10vw, 7rem);
+    font-weight: 900; color: var(--text); line-height: 1;
+    text-shadow: 0 0 60px rgba(201,168,76,0.15);
+    transition: transform 0.2s ease, color 0.3s;
+  }
+
+  .display-debater-score.bump {
+    animation: scorebump 0.3s ease-out;
+  }
+  @keyframes scorebump {
+    0% { transform: scale(1.3); color: var(--gold-light); }
+    100% { transform: scale(1); }
+  }
+
+  .display-debater.active-debater .display-debater-name {
+    color: var(--gold-light);
+  }
+
+  .display-vs {
+    font-family: 'Cinzel', serif; font-size: 1rem;
+    letter-spacing: 0.2em; color: var(--gold-dim);
+    text-align: center;
+  }
+
+  .display-divider {
+    width: 100%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+    opacity: 0.4;
+  }
+
+  .display-timer {
+    font-family: 'Cinzel', serif; font-size: clamp(3rem, 8vw, 6rem);
+    font-weight: 700; color: var(--gold);
+    letter-spacing: 0.05em; text-align: center;
+    transition: color 0.3s;
+  }
+  .display-timer.running { color: var(--green-light); text-shadow: 0 0 40px rgba(122,186,138,0.3); }
+  .display-timer.warning { color: #E08040; }
+  .display-timer.alarm { color: var(--crimson); animation: blink 0.5s ease-in-out infinite; }
+
+  .display-footer {
+    font-style: italic; font-size: 0.85rem;
+    color: var(--text-dim); text-align: center;
+    letter-spacing: 0.05em;
+  }
+
+  /* Waiting state */
+  .waiting {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 1.5rem; padding: 4rem;
+    opacity: 0.5;
+  }
+  .waiting .mandala { opacity: 0.4; }
+  .waiting p {
+    font-style: italic; color: var(--text-dim);
+    font-size: 1rem; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── ROLE SELECTOR ── -->
+<div id="role-selector">
+  <div class="mandala"></div>
+  <h1 class="selector-title">Tibetan Debate</h1>
+  <p class="selector-sub">Multi-window sync demo. Choose a role for this window.</p>
+  <div class="role-buttons">
+    <div>
+      <button class="role-btn" onclick="setRole('controller')">
+        <span>🎛 Controller</span>
+      </button>
+      <span class="role-hint">iPad / your device</span>
+    </div>
+    <div>
+      <button class="role-btn" onclick="setRole('display')">
+        <span>📺 Display</span>
+      </button>
+      <span class="role-hint">External monitor</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONTROLLER APP ── -->
+<div id="controller" class="app">
+  <div class="header">
+    <span class="header-title">Tibetan Debate — Controller</span>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div class="sync-dot" id="ctrl-sync-dot"></div>
+      <span class="role-badge controller">Controller</span>
+    </div>
+  </div>
+
+  <div style="padding:2rem;display:flex;flex-direction:column;gap:2rem;">
+
+    <!-- Debaters -->
+    <div>
+      <div class="section-label">Debaters — click to set active speaker</div>
+      <div class="debaters-grid">
+        <div class="debater-card" id="card-A" onclick="setActive('A')">
+          <div class="debater-role-label">Challenger</div>
+          <div class="debater-name">Debater A</div>
+          <div class="debater-score" id="score-A">0</div>
+          <div class="score-btns">
+            <button class="score-btn" onclick="event.stopPropagation();adjustScore('A',1)">+</button>
+            <button class="score-btn minus" onclick="event.stopPropagation();adjustScore('A',-1)">−</button>
+          </div>
+        </div>
+        <div class="debater-card" id="card-B" onclick="setActive('B')">
+          <div class="debater-role-label">Defender</div>
+          <div class="debater-name">Debater B</div>
+          <div class="debater-score" id="score-B">0</div>
+          <div class="score-btns">
+            <button class="score-btn" onclick="event.stopPropagation();adjustScore('B',1)">+</button>
+            <button class="score-btn minus" onclick="event.stopPropagation();adjustScore('B',-1)">−</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase -->
+    <div class="phase-section">
+      <div class="section-label">Debate Phase</div>
+      <div class="phase-grid">
+        <button class="phase-btn active" onclick="setPhase('Opening')" id="phase-Opening">Opening</button>
+        <button class="phase-btn" onclick="setPhase('Challenge')" id="phase-Challenge">Challenge</button>
+        <button class="phase-btn" onclick="setPhase('Rebuttal')" id="phase-Rebuttal">Rebuttal</button>
+        <button class="phase-btn" onclick="setPhase('Cross-Exam')" id="phase-Cross-Exam">Cross-Exam</button>
+        <button class="phase-btn" onclick="setPhase('Closing')" id="phase-Closing">Closing</button>
+        <button class="phase-btn" onclick="setPhase('Deliberation')" id="phase-Deliberation">Deliberation</button>
+      </div>
+    </div>
+
+    <!-- Timer -->
+    <div class="timer-section">
+      <div class="section-label">Timer</div>
+      <div class="timer-display" id="ctrl-timer">3:00</div>
+      <div class="timer-btns">
+        <button class="ctrl-btn primary" id="timer-toggle" onclick="toggleTimer()">Start</button>
+        <button class="ctrl-btn" onclick="resetTimer(180)">3 min</button>
+        <button class="ctrl-btn" onclick="resetTimer(300)">5 min</button>
+        <button class="ctrl-btn danger" onclick="resetTimer(null)">Reset</button>
+      </div>
+    </div>
+
+    <!-- Open display -->
+    <div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid rgba(201,168,76,0.1);">
+      <button class="ctrl-btn primary" onclick="openDisplayWindow()" style="width:100%;justify-content:center;display:flex;font-size:0.85rem;">
+        ✦ Open Display Window
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── DISPLAY APP ── -->
+<div id="display" class="app">
+  <div class="header" style="position:fixed;width:100%">
+    <span class="header-title">Tibetan Debate — Display</span>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div class="sync-dot" id="disp-sync-dot"></div>
+      <span class="role-badge display">Display</span>
+    </div>
+  </div>
+
+  <div id="display-waiting" class="waiting" style="margin:auto;margin-top:6rem;">
+    <div class="mandala"></div>
+    <p>Waiting for controller…<br>Open the Controller window to begin.</p>
+  </div>
+
+  <div id="display-content" class="display-inner" style="display:none;margin:auto;margin-top:5rem;">
+    <div class="display-ornament">❧ ✦ ❧</div>
+    <div class="display-phase" id="disp-phase">Opening</div>
+    <div class="display-divider"></div>
+    <div class="display-scores">
+      <div class="display-debater" id="disp-debater-A">
+        <div class="display-debater-role">Challenger</div>
+        <div class="display-debater-name">Debater A</div>
+        <div class="display-debater-score" id="disp-score-A">0</div>
+      </div>
+      <div class="display-vs">vs</div>
+      <div class="display-debater" id="disp-debater-B">
+        <div class="display-debater-role">Defender</div>
+        <div class="display-debater-name">Debater B</div>
+        <div class="display-debater-score" id="disp-score-B">0</div>
+      </div>
+    </div>
+    <div class="display-divider"></div>
+    <div class="display-timer" id="disp-timer">3:00</div>
+    <div class="display-footer" id="disp-footer">Debate in progress</div>
+    <div class="display-ornament" style="font-size:1rem;opacity:0.3">— ✦ —</div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let state = {
+  scores: { A: 0, B: 0 },
+  active: null,
+  phase: 'Opening',
+  timer: { seconds: 180, running: false, state: 'idle' }
+};
+
+let timerInterval = null;
+let role = null;
+const channel = new BroadcastChannel('tibetan-debate-v1');
+
+// ─── ROLE DETECTION ──────────────────────────────────────
+function detectRole() {
+  const params = new URLSearchParams(window.location.search);
+  const r = params.get('role');
+  if (r === 'controller' || r === 'display') initRole(r);
+}
+
+function setRole(r) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('role', r);
+  window.location.href = url.toString();
+}
+
+function openDisplayWindow() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('role', 'display');
+  window.open(url.toString(), 'tibetan-display', 'width=1200,height=750');
+}
+
+function initRole(r) {
+  role = r;
+  document.getElementById('role-selector').style.display = 'none';
+  document.getElementById(role).classList.add('active');
+
+  if (role === 'display') {
+    // Request current state from controller
+    channel.postMessage({ type: 'REQUEST_STATE' });
+  }
+}
+
+// ─── BROADCAST ───────────────────────────────────────────
+function broadcast(update) {
+  channel.postMessage({ type: 'STATE', state: state });
+  flashDot('ctrl-sync-dot');
+}
+
+channel.onmessage = (e) => {
+  const msg = e.data;
+  if (msg.type === 'REQUEST_STATE' && role === 'controller') {
+    channel.postMessage({ type: 'STATE', state: state });
+  }
+  if (msg.type === 'STATE' && role === 'display') {
+    const prev = { ...state };
+    state = msg.state;
+    renderDisplay(prev);
+    flashDot('disp-sync-dot');
+  }
+};
+
+function flashDot(id) {
+  const dot = document.getElementById(id);
+  if (!dot) return;
+  dot.classList.remove('active');
+  void dot.offsetWidth;
+  dot.classList.add('active');
+  setTimeout(() => dot.classList.remove('active'), 800);
+}
+
+// ─── CONTROLLER ACTIONS ──────────────────────────────────
+function setActive(who) {
+  state.active = state.active === who ? null : who;
+  document.getElementById('card-A').classList.toggle('active', state.active === 'A');
+  document.getElementById('card-B').classList.toggle('active', state.active === 'B');
+  broadcast();
+}
+
+function adjustScore(who, delta) {
+  state.scores[who] = Math.max(0, state.scores[who] + delta);
+  document.getElementById(`score-${who}`).textContent = state.scores[who];
+  broadcast();
+}
+
+function setPhase(phase) {
+  state.phase = phase;
+  document.querySelectorAll('.phase-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`phase-${phase}`)?.classList.add('active');
+  broadcast();
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function getTimerState(s) {
+  if (s <= 0) return 'alarm';
+  if (s <= 30) return 'warning';
+  if (state.timer.running) return 'running';
+  return 'idle';
+}
+
+function updateTimerDisplay() {
+  const t = state.timer;
+  const ts = getTimerState(t.seconds);
+  const formatted = formatTime(Math.max(0, t.seconds));
+
+  const ctrlEl = document.getElementById('ctrl-timer');
+  ctrlEl.textContent = formatted;
+  ctrlEl.className = 'timer-display ' + ts;
+
+  const btn = document.getElementById('timer-toggle');
+  if (btn) btn.textContent = t.running ? 'Pause' : 'Start';
+}
+
+function toggleTimer() {
+  if (state.timer.running) {
+    clearInterval(timerInterval);
+    state.timer.running = false;
+  } else {
+    if (state.timer.seconds <= 0) return;
+    state.timer.running = true;
+    timerInterval = setInterval(() => {
+      if (state.timer.seconds > 0) {
+        state.timer.seconds--;
+        state.timer.state = getTimerState(state.timer.seconds);
+        if (state.timer.seconds <= 0) {
+          clearInterval(timerInterval);
+          state.timer.running = false;
+        }
+        updateTimerDisplay();
+        broadcast();
+      }
+    }, 1000);
+  }
+  updateTimerDisplay();
+  broadcast();
+}
+
+function resetTimer(secs) {
+  clearInterval(timerInterval);
+  state.timer.running = false;
+  state.timer.seconds = secs !== null ? secs : 180;
+  state.timer.state = 'idle';
+  updateTimerDisplay();
+  broadcast();
+}
+
+// ─── DISPLAY RENDER ──────────────────────────────────────
+function renderDisplay(prev) {
+  document.getElementById('display-waiting').style.display = 'none';
+  document.getElementById('display-content').style.display = 'flex';
+
+  document.getElementById('disp-phase').textContent = state.phase.toUpperCase();
+
+  // Scores with bump animation
+  ['A','B'].forEach(who => {
+    const el = document.getElementById(`disp-score-${who}`);
+    el.textContent = state.scores[who];
+    if (prev && prev.scores && prev.scores[who] !== state.scores[who]) {
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+    }
+    document.getElementById(`disp-debater-${who}`).classList.toggle(
+      'active-debater', state.active === who
+    );
+  });
+
+  // Timer
+  const ts = getTimerState(state.timer.seconds);
+  const timerEl = document.getElementById('disp-timer');
+  timerEl.textContent = formatTime(Math.max(0, state.timer.seconds));
+  timerEl.className = 'display-timer ' + ts;
+
+  // Footer
+  const footerEl = document.getElementById('disp-footer');
+  if (state.active) {
+    footerEl.textContent = `Debater ${state.active} is speaking`;
+  } else {
+    footerEl.textContent = state.timer.running ? 'Debate in progress' : 'Paused';
+  }
+}
+
+// ─── INIT ────────────────────────────────────────────────
+detectRole();
+</script>
+</body>
+</html>
